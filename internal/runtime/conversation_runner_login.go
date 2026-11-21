@@ -28,6 +28,10 @@ func runnerLoginSpec(provider string) (conversationLoginSpec, bool) {
 		return conversationLoginSpec{"Claude Code", ".claude", ".credentials.json", "CLAUDE_CONFIG_DIR", BindClaudeCode}, true
 	case AgentCLIAntigravity:
 		return conversationLoginSpec{"Antigravity", ".gemini/antigravity-cli", "antigravity-oauth-token", "", BindAgentCLI}, true
+	case AgentCLIZCode:
+		// zcode 官方登录(BigModel Coding Plan 的 apiKey)整份落在 ~/.zcode/cli/config.json 单文件里,
+		// 复用 codex 同款单文件暂存;BindGit 走通用读取分支,避开 antigravity/OAuth 特判
+		return conversationLoginSpec{"ZCode", ".zcode/cli", "config.json", "", BindGit}, true
 	default:
 		return conversationLoginSpec{}, false
 	}

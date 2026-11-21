@@ -78,6 +78,9 @@ func TestAgentCLIRuntimeAuthModeIsPersonal(t *testing.T) {
 	if r.RuntimeAuthMode("codex") != RuntimeAuthLocal {
 		t.Fatal("codex local login must stay local")
 	}
+	if r.RuntimeAuthMode("zcode") != RuntimeAuthLocal {
+		t.Fatal("zcode reuses the host's official login")
+	}
 	if r.RuntimeAuthMode("codebuddy") != RuntimeAuthPersonal {
 		t.Fatal("codebuddy still defaults to personal credentials")
 	}

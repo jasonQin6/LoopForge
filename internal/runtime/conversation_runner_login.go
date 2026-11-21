@@ -90,6 +90,11 @@ func PrepareRunnerAgentCLILogin(sandbox Sandbox, command CommandSpec) (map[strin
 		}
 		return nil, nil, err
 	}
+	// 白名单三家的 prepareRunnerLogin 都返回非 nil env(OAuth/agy 分支),
+	// 但通用尾路径(zcode 单文件暂存)返回 nil——这里必须兜底,否则 env["HOME"] 赋值 panic
+	if env == nil {
+		env = map[string]string{}
+	}
 	_, homeEnv := privateHomePaths(sandbox, sandbox.Workspace(), command)
 	env["HOME"] = homeEnv
 	tmp, err := EnsureControlDirectory(sandbox.Workspace(), "tmp", PrivateHomeName(command))

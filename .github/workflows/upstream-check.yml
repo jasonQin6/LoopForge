@@ -1,0 +1,28 @@
+# 检测上游(Tencent/LoopForge)main 领先我们的部署分支多少;落后则开 issue 通知 rebase。
+# 只检测不合并:三刀 patch 触登录安全边界,合并必须人工过目(语法绿≠语义绿)。
+name: upstream-check
+on:
+  schedule:
+    - cron: "0 1 * * 1" # 每周一 09:00 北京时间
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - run: git remote add upstream https://github.com/Tencent/LoopForge.git && git fetch upstream main
+      - id: ahead
+        run: |
+          N=$(git rev-list --count HEAD..upstream/main)
+          echo "count=$N" >> "$GITHUB_OUTPUT"
+          [ "$N" -gt 0 ] && git log --oneline HEAD..upstream/main | head -20 > /tmp/log.txt || true
+      - if: steps.ahead.outputs.count != '0'
+        uses: peter-evans/create-issue-from-file@v5
+        with:
+          title: "upstream ahead by ${{ steps.ahead.outputs.count }} commits — rebase zcode-local-login"
+          content-filepath: /tmp/log.txt
+          labels: upstream-sync

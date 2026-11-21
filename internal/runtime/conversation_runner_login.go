@@ -95,6 +95,20 @@ func PrepareRunnerAgentCLILogin(sandbox Sandbox, command CommandSpec) (map[strin
 	if env == nil {
 		env = map[string]string{}
 	}
+	if command.Provider == AgentCLIZCode {
+		// zcode 0.17 的官方登录不止 cli/config.json:凭据与已选模型状态在
+		// ~/.zcode/v2 的 json 文件里(缺它则 CLI 报 "Select a model"),单文件暂存机制
+		// 装不下,这里补拷 v2 的 json 集(排除日志/索引/缓存)并纳入 cleanup。
+		inner := cleanup
+		v2Cleanup, err := stageZCodeV2State(home)
+		if err != nil {
+			if inner != nil {
+				err = errors.Join(err, inner())
+			}
+			return nil, nil, err
+		}
+		cleanup = joinRunnerLoginCleanups(inner, v2Cleanup)
+	}
 	_, homeEnv := privateHomePaths(sandbox, sandbox.Workspace(), command)
 	env["HOME"] = homeEnv
 	tmp, err := EnsureControlDirectory(sandbox.Workspace(), "tmp", PrivateHomeName(command))
@@ -342,4 +356,55 @@ func readRootLoginFile(dir *os.Root, name string) ([]byte, error) {
 		return nil, fmt.Errorf("invalid login file")
 	}
 	return data, nil
+}
+
+// stageZCodeV2State copies the host ~/.zcode/v2 json files (credentials,
+// bot config, model-selection state) into the staged home. Logs, sqlite
+// indexes and caches are excluded: only the json state matters to a fresh
+// CLI process, and credentials.json must not outlive the task workspace.
+func stageZCodeV2State(home AgentCLIHome) (func() error, error) {
+	hostHome, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+	source := filepath.Join(hostHome, ".zcode", "v2")
+	entries, err := os.ReadDir(source)
+	if err != nil {
+		return nil, fmt.Errorf("读取本机 ~/.zcode/v2 登录状态失败: %w", err)
+	}
+	target := filepath.Join(home.Path(), ".zcode", "v2")
+	if err := os.MkdirAll(target, 0o700); err != nil {
+		return nil, err
+	}
+	staged := 0
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(source, entry.Name()))
+		if err != nil {
+			return nil, err
+		}
+		if err := os.WriteFile(filepath.Join(target, entry.Name()), data, 0o600); err != nil {
+			return nil, err
+		}
+		staged++
+	}
+	if staged == 0 {
+		return nil, fmt.Errorf("本机 ~/.zcode/v2 无 json 登录状态,请先完成 ZCode 官方登录")
+	}
+	return func() error { return os.RemoveAll(target) }, nil
+}
+
+func joinRunnerLoginCleanups(a, b func() error) func() error {
+	return func() error {
+		var err error
+		if a != nil {
+			err = a()
+		}
+		if b != nil {
+			err = errors.Join(err, b())
+		}
+		return err
+	}
 }

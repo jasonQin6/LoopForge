@@ -291,8 +291,10 @@ func TestRunnerCredentialArtifactAndRepositoryHelpers(t *testing.T) {
 		argv    []string
 		wantErr bool
 	}{
-		{domain.RunnerInvocation{}, flowruntime.BindCodeBuddy, []string{"codebuddy"}, true},
-		{domain.RunnerInvocation{CodeBuddyAPIKey: "k", CodeBuddyInternetEnvironment: "intl"}, flowruntime.BindCodeBuddy, []string{"codebuddy"}, false},
+		{domain.RunnerInvocation{}, flowruntime.BindCodeBuddy, []string{"codebuddy"}, false},
+		{domain.RunnerInvocation{CredentialSource: domain.RuntimeAuthLocal}, flowruntime.BindCodeBuddy, []string{"codebuddy"}, false},
+		{domain.RunnerInvocation{CredentialSource: domain.RuntimeAuthPersonal}, flowruntime.BindCodeBuddy, []string{"codebuddy"}, true},
+		{domain.RunnerInvocation{CredentialSource: domain.RuntimeAuthPersonal, CodeBuddyAPIKey: "k", CodeBuddyInternetEnvironment: "intl"}, flowruntime.BindCodeBuddy, []string{"codebuddy"}, false},
 		{domain.RunnerInvocation{CredentialSource: domain.RuntimeAuthPersonal}, flowruntime.BindCodex, []string{"codex", "p"}, true},
 		{domain.RunnerInvocation{CredentialSource: domain.RuntimeAuthPersonal, CodexAPIKey: "k"}, flowruntime.BindCodex, []string{"codex"}, true},
 		{domain.RunnerInvocation{CredentialSource: domain.RuntimeAuthPersonal}, flowruntime.BindClaudeCode, []string{"claude"}, true},

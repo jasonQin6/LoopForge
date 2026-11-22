@@ -23,6 +23,11 @@ func DiscoverRunnerLoginModels(ctx context.Context, provider, binary string) ([]
 	if !ok {
 		return nil, fmt.Errorf("该 CLI 暂不支持获取账号模型")
 	}
+	// CodeBuddy 走 CODEBUDDY_CONFIG_DIR 直连真实配置,没有 codex app-server 那样的
+	// 模型枚举协议可套用;先明确拒绝,避免半吊子协议探测。
+	if login.binding == BindCodeBuddy {
+		return nil, fmt.Errorf("CodeBuddy 暂不支持自动获取账号模型,请在执行器配置中手动填写模型名")
+	}
 	root, err := os.MkdirTemp("", "loopforge-login-models-")
 	if err != nil {
 		return nil, fmt.Errorf("无法创建模型查询目录")

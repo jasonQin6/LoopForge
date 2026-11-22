@@ -81,8 +81,8 @@ func TestAgentCLIRuntimeAuthModeIsPersonal(t *testing.T) {
 	if r.RuntimeAuthMode("zcode") != RuntimeAuthLocal {
 		t.Fatal("zcode reuses the host's official login")
 	}
-	if r.RuntimeAuthMode("codebuddy") != RuntimeAuthPersonal {
-		t.Fatal("codebuddy still defaults to personal credentials")
+	if r.RuntimeAuthMode("codebuddy") != RuntimeAuthLocal {
+		t.Fatal("codebuddy reuses the host's official login")
 	}
 	if r.RuntimeAuthMode("agy") != RuntimeAuthLocal {
 		t.Fatal("Antigravity supports local account login")

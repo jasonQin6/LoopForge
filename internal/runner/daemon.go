@@ -1121,6 +1121,9 @@ func bindInvocationCredentials(inv *domain.RunnerInvocation, bindings []runtime.
 	for _, binding := range bindings {
 		switch binding {
 		case runtime.BindCodeBuddy:
+			if !personal {
+				continue
+			}
 			key := strings.TrimSpace(inv.CodeBuddyAPIKey)
 			if key == "" {
 				return nil, nil, errors.New("CodeBuddy 个人 API Key 未配置")

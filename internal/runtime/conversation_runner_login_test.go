@@ -104,3 +104,69 @@ func TestConversationRunnerLoginSupportsClaudeOAuthEnvironment(t *testing.T) {
 		t.Fatal("CLI did not use the Runner OAuth environment")
 	}
 }
+
+func TestCodeBuddyLocalLoginReusesHostConfigDir(t *testing.T) {
+	login, supported := runnerLoginSpec("codebuddy")
+	if !supported || login.binding != BindCodeBuddy || login.file != "" {
+		t.Fatal("codebuddy runner login spec missing or malformed")
+	}
+	// docker 沙箱看不到宿主 home,必须明确拒绝而不是静默走错目录。
+	if _, _, err := prepareConversationRunnerLogin(t.TempDir(), login, true, true); err == nil || !strings.Contains(err.Error(), "docker") {
+		t.Fatalf("docker sandbox was not rejected: %v", err)
+	}
+	// 宿主没有 ~/.codebuddy 时给出 runner 侧错误。
+	bare := t.TempDir()
+	t.Setenv("HOME", bare)
+	if _, _, err := prepareConversationRunnerLogin(t.TempDir(), login, true, false); err == nil || !strings.Contains(err.Error(), "本机登录态不可用") {
+		t.Fatalf("missing host config dir was not reported: %v", err)
+	}
+	if cleanup, env, err := prepareConversationRunnerLogin(t.TempDir(), login, false, false); cleanup != nil || env != nil || err != nil {
+		t.Fatal("personal mode must not touch the host config dir")
+	}
+
+	host := t.TempDir()
+	root := t.TempDir()
+	t.Setenv("HOME", host)
+	configDir := filepath.Join(host, ".codebuddy")
+	if err := os.MkdirAll(configDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	settings := `{"model":"hy4flash-free"}`
+	if err := os.WriteFile(filepath.Join(configDir, "settings.json"), []byte(settings), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CODEBUDDY_API_KEY", "host-key")
+	script := `set -eu
+test "$CODEBUDDY_CONFIG_DIR" = "$1"
+test -z "${CODEBUDDY_API_KEY:-}"
+grep -q hy4flash-free "$CODEBUDDY_CONFIG_DIR/settings.json"
+# 会话 HOME 里的 .codebuddy 只是 ensureConversationCLI 预建的空壳,不得暂存任何宿主内容
+test -z "$(ls -A "$2/home/.codebuddy" 2>/dev/null || true)"
+printf 'local-auth-ok\n'`
+	req := ConversationProcessRequest{Operation: "start", Command: &ConversationCommand{
+		Argv: []string{"sh", "-c", script, "codebuddy-login", configDir, root}, Provider: "codebuddy",
+		Bindings: []CredentialBinding{BindCodeBuddy}, RunnerLogin: true,
+		Credentials: RunCredentials{CodeBuddy: CodeBuddyCredential{APIKey: "personal"}},
+	}}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	pool := &ConversationProcessPool{}
+	started, err := pool.Handle(ctx, root, "", nil, req, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := conversationPoll(t, pool, ctx, root, started.ID); strings.TrimSpace(got) != "local-auth-ok" {
+		t.Fatalf("CLI did not reuse the host config dir: %q", got)
+	}
+	if _, err := pool.Handle(ctx, root, "", nil, ConversationProcessRequest{Operation: "stop", ID: started.ID}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(filepath.Join(configDir, "settings.json")); err != nil || string(data) != settings {
+		t.Fatal("host codebuddy settings changed")
+	}
+	req.Command.RunnerLogin = false
+	req.Command.Credentials = RunCredentials{}
+	if _, err := pool.Handle(ctx, root, "", nil, req, nil); err == nil || !strings.Contains(err.Error(), "API Key") {
+		t.Fatalf("personal mode without a key fell back to runner login: %v", err)
+	}
+}

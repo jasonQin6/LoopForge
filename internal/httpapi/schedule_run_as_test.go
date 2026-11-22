@@ -60,7 +60,7 @@ func TestScheduleJobRunsWithTheSaversKey(t *testing.T) {
 	if code := scheduleAuthzStatus(t, server, nokey, http.MethodPut, "/api/schedule-jobs", job); code != http.StatusBadRequest {
 		t.Fatalf("saving without a key = %d", code)
 	}
-	if msg := scheduleMissingKeyError(assistantEngineCodeBuddy); !strings.Contains(msg, "共享 Key") {
+	if msg := scheduleMissingKeyError(assistantEngineCodeBuddy); !strings.Contains(msg, "启用账号登录") {
 		t.Fatalf("missing key reminder = %q", msg)
 	}
 

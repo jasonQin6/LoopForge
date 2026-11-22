@@ -26,6 +26,12 @@ func runnerLoginSpec(provider string) (conversationLoginSpec, bool) {
 		return conversationLoginSpec{"Codex", ".codex", "auth.json", "CODEX_HOME", BindCodex}, true
 	case "claude-code":
 		return conversationLoginSpec{"Claude Code", ".claude", ".credentials.json", "CLAUDE_CONFIG_DIR", BindClaudeCode}, true
+	case "codebuddy":
+		// CodeBuddy 的官方登录不是单个凭证文件:登录态、模型选择、插件整份住在
+		// ~/.codebuddy 配置目录里,单文件暂存模型装不下。不做暂存,直接把
+		// CODEBUDDY_CONFIG_DIR 指向宿主真实目录原样复用(prepareCodeBuddyLocalLogin);
+		// binding 取 BindCodeBuddy,会话路径据此剥掉 API Key 绑定。
+		return conversationLoginSpec{"CodeBuddy", ".codebuddy", "", "", BindCodeBuddy}, true
 	case AgentCLIAntigravity:
 		return conversationLoginSpec{"Antigravity", ".gemini/antigravity-cli", "antigravity-oauth-token", "", BindAgentCLI}, true
 	case AgentCLIZCode:
@@ -126,6 +132,9 @@ func PrepareRunnerAgentCLILogin(sandbox Sandbox, command CommandSpec) (map[strin
 }
 
 func prepareRunnerLogin(home AgentCLIHome, login conversationLoginSpec, enabled bool, docker ...bool) (func() error, map[string]string, error) {
+	if login.binding == BindCodeBuddy {
+		return prepareCodeBuddyLocalLogin(login, enabled, len(docker) > 0 && docker[0])
+	}
 	home.Rel = filepath.Join(home.Rel, login.dir)
 	target, err := openAgentCLIHome(home)
 	if err != nil {
@@ -247,6 +256,34 @@ func prepareRunnerLogin(home AgentCLIHome, login conversationLoginSpec, enabled 
 		return cleanup, env, nil
 	}
 	return cleanup, nil, nil
+}
+
+// prepareCodeBuddyLocalLogin 复用宿主真实的 ~/.codebuddy 配置目录。CodeBuddy 的
+// 登录态不是单个凭证文件(登录、模型选择、插件整份住在配置目录里),单文件暂存模型
+// 装不下;这里不拷贝任何东西,直接把 CODEBUDDY_CONFIG_DIR 指向宿主真实目录,CLI
+// 原样复用真实登录与配置,会话也写回真实目录。docker 沙箱看不到宿主 home,明确拒绝。
+// API key 环境变量显式清空:CLI 里环境变量优先于配置目录里的登录,残留的平台 key
+// 会盖掉本机登录态。
+func prepareCodeBuddyLocalLogin(login conversationLoginSpec, enabled, docker bool) (func() error, map[string]string, error) {
+	if !enabled {
+		return nil, nil, nil
+	}
+	if docker {
+		return nil, nil, fmt.Errorf("docker 沙箱内看不到执行机器的 ~/.codebuddy,请把该运行时切回个人凭证或改用 process 沙箱")
+	}
+	hostHome, err := os.UserHomeDir()
+	if err != nil {
+		return nil, nil, err
+	}
+	configDir := filepath.Join(hostHome, ".codebuddy")
+	if info, err := os.Stat(configDir); err != nil || !info.IsDir() {
+		return nil, nil, fmt.Errorf("执行机器上的 %s 本机登录态不可用，请检查 Runner 账户的 CLI 登录", login.label)
+	}
+	return nil, map[string]string{
+		"CODEBUDDY_CONFIG_DIR": configDir,
+		"CODEBUDDY_API_KEY":    "",
+		"CODEBUDDY_BASE_URL":   "",
+	}, nil
 }
 
 func readRunnerLoginFile(dir, name string) ([]byte, error) {

@@ -689,8 +689,6 @@ func normalizeRunnerRuntimes(reported, existing []domain.RunnerRuntime) []domain
 			out[i].AuthMode = domain.RuntimeAuthPersonal
 		} else if previous.AuthMode == domain.RuntimeAuthLocal || previous.AuthMode == domain.RuntimeAuthPersonal {
 			out[i].AuthMode = previous.AuthMode
-		} else if strings.EqualFold(out[i].Provider, "codebuddy") {
-			out[i].AuthMode = domain.RuntimeAuthPersonal
 		} else {
 			out[i].AuthMode = domain.RuntimeAuthLocal
 		}

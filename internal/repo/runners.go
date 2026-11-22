@@ -320,8 +320,6 @@ func (r *RunnersRepo) RunnerHeartbeat(id string, runtimes []domain.RunnerRuntime
 			runtimes[i].AuthMode = domain.RuntimeAuthPersonal
 		} else if mode := authModes[runtimes[i].Provider]; mode != "" {
 			runtimes[i].AuthMode = mode
-		} else if strings.EqualFold(runtimes[i].Provider, "codebuddy") {
-			runtimes[i].AuthMode = domain.RuntimeAuthPersonal
 		} else {
 			runtimes[i].AuthMode = domain.RuntimeAuthLocal
 		}
@@ -353,9 +351,6 @@ func (r *RunnersRepo) RunnerHeartbeat(id string, runtimes []domain.RunnerRuntime
 func (r *RunnersRepo) SetRunnerRuntimeAuthMode(runnerID, provider, authMode string, now time.Time) error {
 	if authMode != domain.RuntimeAuthLocal && authMode != domain.RuntimeAuthPersonal {
 		return fmt.Errorf("invalid runtime auth mode %q", authMode)
-	}
-	if strings.EqualFold(provider, "codebuddy") && authMode != domain.RuntimeAuthPersonal {
-		return fmt.Errorf("CodeBuddy 仅支持个人凭证")
 	}
 	if domain.IsAgentCLIKind(provider) && !domain.SupportsRunnerLogin(provider) && authMode != domain.RuntimeAuthPersonal {
 		return fmt.Errorf("%s 仅支持个人凭证", provider)

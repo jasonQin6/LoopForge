@@ -313,15 +313,12 @@ func (r Runner) RuntimeAuthMode(provider string) string {
 			break
 		}
 	}
-	if strings.EqualFold(provider, "codebuddy") {
-		return RuntimeAuthPersonal
-	}
 	return RuntimeAuthLocal
 }
 
 func SupportsRunnerLogin(provider string) bool {
 	switch strings.ToLower(strings.TrimSpace(provider)) {
-	case "codex", "claude-code", "agy", "zcode":
+	case "codebuddy", "codex", "claude-code", "agy", "zcode":
 		return true
 	default:
 		return false

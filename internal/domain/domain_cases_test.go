@@ -176,7 +176,7 @@ func TestRunEvalRunnerAndSpaceBranches(t *testing.T) {
 		t.Fatal("range accepted")
 	}
 	r := Runner{Runtimes: []RunnerRuntime{{Provider: "x", Status: RuntimeStatusOnline, AuthMode: RuntimeAuthPersonal}, {Provider: "off", Status: RuntimeStatusDisabled}}}
-	if !r.SupportsProvider("X") || r.SupportsProvider("off") || r.SupportsProvider("") || r.RuntimeAuthMode("x") != RuntimeAuthPersonal || r.RuntimeAuthMode("codebuddy") != RuntimeAuthPersonal {
+	if !r.SupportsProvider("X") || r.SupportsProvider("off") || r.SupportsProvider("") || r.RuntimeAuthMode("x") != RuntimeAuthPersonal || r.RuntimeAuthMode("codebuddy") != RuntimeAuthLocal {
 		t.Fatal("runner runtime selection")
 	}
 	for _, artifact := range []SpaceArtifact{

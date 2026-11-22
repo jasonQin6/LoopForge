@@ -63,8 +63,8 @@ func TestRunnerRegistryValidationRuntimeAndPreferences(t *testing.T) {
 	if err := s.SetRunnerRuntimeAuthMode(runner.ID, "codex", "bad", now); err == nil {
 		t.Fatal("invalid auth mode accepted")
 	}
-	if err := s.SetRunnerRuntimeAuthMode(runner.ID, "codebuddy", domain.RuntimeAuthLocal, now); err == nil {
-		t.Fatal("local CodeBuddy auth accepted")
+	if err := s.SetRunnerRuntimeAuthMode(runner.ID, "codebuddy", domain.RuntimeAuthLocal, now); err != nil {
+		t.Fatal("local CodeBuddy auth rejected")
 	}
 	if err := s.SetRunnerRuntimeAuthMode(runner.ID, "missing", domain.RuntimeAuthPersonal, now); err == nil {
 		t.Fatal("missing runtime auth changed")
@@ -85,7 +85,7 @@ func TestRunnerRegistryValidationRuntimeAndPreferences(t *testing.T) {
 		t.Fatal(err)
 	}
 	heartbeat, _ := s.Runner(runner.ID)
-	if heartbeat.Runtimes[0].Status != domain.RuntimeStatusDisabled || heartbeat.Runtimes[1].AuthMode != domain.RuntimeAuthLocal || heartbeat.Runtimes[2].AuthMode != domain.RuntimeAuthPersonal || heartbeat.RunnerVersion != "1.2.3" {
+	if heartbeat.Runtimes[0].Status != domain.RuntimeStatusDisabled || heartbeat.Runtimes[1].AuthMode != domain.RuntimeAuthLocal || heartbeat.Runtimes[2].AuthMode != domain.RuntimeAuthLocal || heartbeat.RunnerVersion != "1.2.3" {
 		t.Fatalf("heartbeat=%+v", heartbeat)
 	}
 	if err := s.MarkRunnerOffline("", now); !errors.Is(err, ErrRunnerNotFound) {

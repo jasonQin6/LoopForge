@@ -58,6 +58,11 @@ func PrepareRunnerSandboxLogin(sandbox Sandbox, provider, runID, nodeID string) 
 	if !supported {
 		return nil, nil, nil
 	}
+	if provider == "codebuddy" {
+		// CodeBuddy 的本机登录需要真实 HOME,而沙箱(seatbelt/bwrap/docker)对
+		// 真实 home 的散写不可控;先只支持无沙箱的对话执行,沙箱任务保持个人凭证。
+		return nil, nil, fmt.Errorf("CodeBuddy 本机登录暂不支持沙箱任务，请把该运行时切回个人凭证")
+	}
 	scope := sha256.Sum256([]byte(runID + "\x00" + nodeID))
 	home := WorkspaceAgentCLIHome(sandbox.Workspace(), fmt.Sprintf("%s-login-%x", provider, scope[:12]))
 	cleanup, env, err := prepareRunnerLogin(home, login, true, sandboxDriver(sandbox) == "docker")
@@ -258,12 +263,11 @@ func prepareRunnerLogin(home AgentCLIHome, login conversationLoginSpec, enabled 
 	return cleanup, nil, nil
 }
 
-// prepareCodeBuddyLocalLogin 复用宿主真实的 ~/.codebuddy 配置目录。CodeBuddy 的
-// 登录态不是单个凭证文件(登录、模型选择、插件整份住在配置目录里),单文件暂存模型
-// 装不下;这里不拷贝任何东西,直接把 CODEBUDDY_CONFIG_DIR 指向宿主真实目录,CLI
-// 原样复用真实登录与配置,会话也写回真实目录。docker 沙箱看不到宿主 home,明确拒绝。
-// API key 环境变量显式清空:CLI 里环境变量优先于配置目录里的登录,残留的平台 key
-// 会盖掉本机登录态。
+// prepareCodeBuddyLocalLogin 复用宿主真实的 CodeBuddy。实测(E2E bisect)其登录态
+// 挂在 $HOME 上(CODEBUDDY_CONFIG_DIR 只覆盖配置不覆盖登录),也没有可暂存的单个
+// 凭证文件;因此不拷贝、不暂存,直接把 HOME 指向宿主真实目录,CLI 原样复用真实登录、
+// 模型与插件,会话写回真实目录。API key 环境变量显式清空:CLI 里环境变量优先于
+// 本机登录,残留的平台 key 会盖掉登录态。docker 对话沙箱看不到宿主 home,拒绝。
 func prepareCodeBuddyLocalLogin(login conversationLoginSpec, enabled, docker bool) (func() error, map[string]string, error) {
 	if !enabled {
 		return nil, nil, nil
@@ -275,14 +279,13 @@ func prepareCodeBuddyLocalLogin(login conversationLoginSpec, enabled, docker boo
 	if err != nil {
 		return nil, nil, err
 	}
-	configDir := filepath.Join(hostHome, ".codebuddy")
-	if info, err := os.Stat(configDir); err != nil || !info.IsDir() {
+	if info, err := os.Stat(filepath.Join(hostHome, ".codebuddy")); err != nil || !info.IsDir() {
 		return nil, nil, fmt.Errorf("执行机器上的 %s 本机登录态不可用，请检查 Runner 账户的 CLI 登录", login.label)
 	}
 	return nil, map[string]string{
-		"CODEBUDDY_CONFIG_DIR": configDir,
-		"CODEBUDDY_API_KEY":    "",
-		"CODEBUDDY_BASE_URL":   "",
+		"HOME":               hostHome,
+		"CODEBUDDY_API_KEY":  "",
+		"CODEBUDDY_BASE_URL": "",
 	}, nil
 }
 

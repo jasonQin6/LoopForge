@@ -105,23 +105,27 @@ func TestConversationRunnerLoginSupportsClaudeOAuthEnvironment(t *testing.T) {
 	}
 }
 
-func TestCodeBuddyLocalLoginReusesHostConfigDir(t *testing.T) {
+func TestCodeBuddyLocalLoginReusesHostHome(t *testing.T) {
 	login, supported := runnerLoginSpec("codebuddy")
 	if !supported || login.binding != BindCodeBuddy || login.file != "" {
 		t.Fatal("codebuddy runner login spec missing or malformed")
 	}
-	// docker 沙箱看不到宿主 home,必须明确拒绝而不是静默走错目录。
+	// docker 对话沙箱看不到宿主 home,必须明确拒绝而不是静默走错目录。
 	if _, _, err := prepareConversationRunnerLogin(t.TempDir(), login, true, true); err == nil || !strings.Contains(err.Error(), "docker") {
 		t.Fatalf("docker sandbox was not rejected: %v", err)
+	}
+	// 沙箱任务路径(seatbelt/bwrap/docker)不支持真实 HOME,必须拒绝。
+	if _, _, err := PrepareRunnerSandboxLogin(nil, "codebuddy", "r", "n"); err == nil || !strings.Contains(err.Error(), "沙箱") {
+		t.Fatalf("sandboxed task was not rejected: %v", err)
 	}
 	// 宿主没有 ~/.codebuddy 时给出 runner 侧错误。
 	bare := t.TempDir()
 	t.Setenv("HOME", bare)
 	if _, _, err := prepareConversationRunnerLogin(t.TempDir(), login, true, false); err == nil || !strings.Contains(err.Error(), "本机登录态不可用") {
-		t.Fatalf("missing host config dir was not reported: %v", err)
+		t.Fatalf("missing host login was not reported: %v", err)
 	}
 	if cleanup, env, err := prepareConversationRunnerLogin(t.TempDir(), login, false, false); cleanup != nil || env != nil || err != nil {
-		t.Fatal("personal mode must not touch the host config dir")
+		t.Fatal("personal mode must not touch the host home")
 	}
 
 	host := t.TempDir()
@@ -137,14 +141,13 @@ func TestCodeBuddyLocalLoginReusesHostConfigDir(t *testing.T) {
 	}
 	t.Setenv("CODEBUDDY_API_KEY", "host-key")
 	script := `set -eu
-test "$CODEBUDDY_CONFIG_DIR" = "$1"
+test "$HOME" = "$1"
 test -z "${CODEBUDDY_API_KEY:-}"
-grep -q hy4flash-free "$CODEBUDDY_CONFIG_DIR/settings.json"
-# 会话 HOME 里的 .codebuddy 只是 ensureConversationCLI 预建的空壳,不得暂存任何宿主内容
-test -z "$(ls -A "$2/home/.codebuddy" 2>/dev/null || true)"
+test -z "${CODEBUDDY_BASE_URL:-}"
+grep -q hy4flash-free "$HOME/.codebuddy/settings.json"
 printf 'local-auth-ok\n'`
 	req := ConversationProcessRequest{Operation: "start", Command: &ConversationCommand{
-		Argv: []string{"sh", "-c", script, "codebuddy-login", configDir, root}, Provider: "codebuddy",
+		Argv: []string{"sh", "-c", script, "codebuddy-login", host}, Provider: "codebuddy",
 		Bindings: []CredentialBinding{BindCodeBuddy}, RunnerLogin: true,
 		Credentials: RunCredentials{CodeBuddy: CodeBuddyCredential{APIKey: "personal"}},
 	}}
@@ -156,7 +159,7 @@ printf 'local-auth-ok\n'`
 		t.Fatal(err)
 	}
 	if got := conversationPoll(t, pool, ctx, root, started.ID); strings.TrimSpace(got) != "local-auth-ok" {
-		t.Fatalf("CLI did not reuse the host config dir: %q", got)
+		t.Fatalf("CLI did not reuse the host home: %q", got)
 	}
 	if _, err := pool.Handle(ctx, root, "", nil, ConversationProcessRequest{Operation: "stop", ID: started.ID}, nil); err != nil {
 		t.Fatal(err)

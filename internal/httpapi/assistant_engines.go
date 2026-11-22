@@ -268,6 +268,11 @@ func (h *assistantHandlers) assistantTurnUser(stored domain.User, model string, 
 		}
 		return stored, engine + ":" + id, ""
 	}
+	// 本机登录的回合不需要任何平台侧 Key:认证由执行机器上的 ~/.codebuddy 提供,
+	// 可用模型也由该账号决定,共享 Key 的模型白名单不适用。身份回归操作者本人。
+	if runnerLogin {
+		return stored, model, ""
+	}
 	user, shared, ok := h.assistantChatUser(stored)
 	if !ok {
 		return stored, "", "请先在个人配置中配置自己的 CodeBuddy API Key"
